@@ -9,29 +9,32 @@ import objects.blocks.Block;
  */
 public class Level {
     
+    private Level save;
+    
     private Block[][] level;
     private int id;
 
     public Level(int id, Block[][] level) {
+        this(id, level, null);
+    }
+    
+    public Level(int id, Block[][] level, Level save) {
         this.level = level;
         this.id = id;
-    }
-
-    public Block[][] getLevel() {
-        return level;
+        this.save = save;
     }
 
     public void setLevel(Block[][] level) {
         this.level = level;
     }
     
-    public void setBlock(Block block, int xIndex, int yIndex) {
-        level[xIndex][yIndex] = block;
-        block.setArrayPosition(new Point(xIndex, yIndex));
+    public void setBlock(Block block, int x, int y) {
+        block.setArrayPosition(new Point(x, y));
+        level[y][x] = block;
     }
     
     public Block getBlock(int x, int y) {
-        return level[x][y];
+        return level[y][x];
     }
     
     public int getHeight() {
@@ -46,6 +49,14 @@ public class Level {
         return id;
     }
 
+    public Level getSavedStates() {
+        return save;
+    }
+
+    public void setSavedStates(Level save) {
+        this.save = save;
+    }
+    
     public void setID(int id) {
         this.id = id;
     }

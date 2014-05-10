@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.logging.Logger;
 import objects.levels.Level;
-import objects.levels.LevelLoader;
+import objects.levels.LevelManipulator;
 import swing.components.AComponent;
 import swing.toolkit.UIToolkit;
 import turnz.TurnZ;
@@ -107,7 +107,7 @@ public class LevelManagementPane extends AComponent {
     }
 
     public void refresh() {
-        levels = LevelLoader.getAllLevels();
+        levels = LevelManipulator.getAllLevels();
         int levelsPerLine = (int)((2.0/5.0) * (levels.size()+2));
 
         levels.sort(new Comparator<Level>() {

@@ -14,14 +14,14 @@ import swing.toolkit.UIToolkit;
 public class GoalBlock extends Block {
 
     public GoalBlock() {
-        super();
+        super(5);
         setType("GoalBlock");
     }
 
 
     @Override
     public BlockAction doAction() {
-        return BlockAction.Stop;
+        return BlockAction.Finish;
     }
     
     @Override
@@ -30,6 +30,11 @@ public class GoalBlock extends Block {
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
         g2d.setPaint(AColor.DarkGreen);
         g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
+    }
+
+    @Override
+    public char getChar() {
+        return 'G';
     }
 
 }

@@ -13,7 +13,7 @@ import swing.toolkit.UIToolkit;
 public class ObstacleBlock extends Block {
 
     public ObstacleBlock() {
-        super();
+        super(2);
         setType("ObstacleBlock");
     }
 
@@ -29,6 +29,11 @@ public class ObstacleBlock extends Block {
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
         g2d.setPaint(AColor.LightGreen);
         g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
+    }
+
+    @Override
+    public char getChar() {
+        return 'O';
     }
 
 }

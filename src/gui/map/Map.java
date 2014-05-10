@@ -2,7 +2,7 @@ package gui.map;
 
 import animationEngine.MotionFactory;
 import animationEngine.Segment;
-import animationEngine.TimeLine;
+import animationEngine.SegmentGroup;
 import animationEngine.segments.AtomicFloatSegment;
 import animationEngine.segments.AtomicIntegerSegment;
 import animationEngine.segments.HorizontalMotionSegment;
@@ -17,13 +17,18 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.Point;
+import java.io.FileNotFoundException;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Logger;
+import javax.swing.JOptionPane;
 import objects.blocks.Block;
 import objects.blocks.Block.BlockAction;
 import objects.blocks.EmptyBlock;
 import objects.blocks.PlayerBlock;
+import objects.levels.InvalidLevelFileException;
 import objects.levels.Level;
+import objects.levels.LevelManipulator;
 import swing.components.AColor;
 import swing.components.AComponent;
 import swing.components.ALayeredPane;
@@ -43,6 +48,10 @@ public class Map extends AComponent {
 
     private AtomicInteger rotation;
     private AtomicFloat scale;
+    private boolean rotationAnimation;
+    private boolean fallAnimation;
+
+    private int playerWin = 0;
 
     private Gravity gravity;
 
@@ -62,43 +71,9 @@ public class Map extends AComponent {
         super();
         init(level);
 
-        //ADD Components
         this.add(layeredMap);
-        //firstFall();
-    }
-    
-    private void firstFall() {
-        ArrayList<Segment> playerSegments = new ArrayList<>();
-        for (PlayerBlock playerBlock : playerBlocks) {
-            Segment playerSegment = playerFall(playerBlock);
-            if (playerSegment != null) {
-                playerSegments.add(playerSegment);
-            }
-        }
-
-        if (isVisible()) {
-
-            final TimeLine timeLine = new TimeLine();
-
-            for (Segment segment : playerSegments) {
-                timeLine.addSegment(segment);
-            }
-
-            this.addTimeline(timeLine);
-            TurnZ.getINSTANCE().getProcessingQueue().addJob(new ProcessingQueue.Job() {
-
-                @Override
-                public boolean doJob() {
-                    timeLine.compile();
-                    return true;
-                }
-
-                @Override
-                public boolean mustBeRemoved() {
-                    return true;
-                }
-            });
-        }
+        enableFallAnimation(true);
+        enableRotationAnimation(true);
     }
 
     private void init(Level level) {
@@ -107,6 +82,8 @@ public class Map extends AComponent {
         gravity = Gravity.South;
 
         harvestPlayers();
+
+        playerWin = playerBlocks.size();
 
         this.layeredMap = new LayeredMap();
 
@@ -139,11 +116,11 @@ public class Map extends AComponent {
 
     private ArrayList<PlayerBlock> harvestPlayers() {
         playerBlocks.clear();
-        for (int i = 0; i < level.getHeight(); i++) {
-            for (int j = 0; j < level.getWidth(); j++) {
-                if (level.getLevel()[i][j] instanceof PlayerBlock) {
-                    playerBlocks.add((PlayerBlock) level.getLevel()[i][j]);
-                    level.setBlock(new EmptyBlock(), i, j);
+        for (int y = 0; y < level.getHeight(); y++) {
+            for (int x = 0; x < level.getWidth(); x++) {
+                if (level.getBlock(x, y) instanceof PlayerBlock) {
+                    playerBlocks.add((PlayerBlock) level.getBlock(x, y));
+                    level.setBlock(new EmptyBlock(), x, y);
                 }
             }
         }
@@ -170,37 +147,60 @@ public class Map extends AComponent {
         return scale.get();
     }
 
+    public boolean isRotationAnimationEnabled() {
+        return rotationAnimation;
+    }
+
+    public void enableRotationAnimation(boolean rotationAnimation) {
+        this.rotationAnimation = rotationAnimation;
+    }
+
+    public boolean isFallAnimationEnabled() {
+        return fallAnimation;
+    }
+
+    public void enableFallAnimation(boolean fallAnimation) {
+        this.fallAnimation = fallAnimation;
+    }
+
     private synchronized void rotate(Direction direction) {
 
-//        setGravity(direction);
-//
-//        ArrayList<Segment> playerSegments = new ArrayList<>();
-//        for (PlayerBlock playerBlock : playerBlocks) {
-//            Segment playerSegment = playerFall(playerBlock);
-//            if (playerSegment != null) {
-//                playerSegments.add(playerSegment);
-//            }
-//        }
+        setGravity(direction);
+
+        ArrayList<Segment> playerSegments = new ArrayList<>();
+        for (PlayerBlock playerBlock : playerBlocks) {
+            Segment playerSegment = playerFall(playerBlock);
+            if (playerSegment != null) {
+                playerSegments.add(playerSegment);
+            }
+        }
 
         if (isVisible()) {
 
-            final TimeLine timeLine = new TimeLine();
-//
-//            for (Segment segment : playerSegments) {
-//                timeLine.addSegment(segment);
-//            }
-//
-            for (Segment segment : rotateMap(direction)) {
-                timeLine.addSegment(segment);
+            final SegmentGroup rotationGroup = new SegmentGroup();
+            rotationGroup.setTag("RotationGroup");
+
+            if (isRotationAnimationEnabled()) {
+                for (Segment segment : rotateMap(direction)) {
+                    segment.setTag("MapRotation");
+                    rotationGroup.addSegment(segment, SegmentGroup.Position.WITH_FIRST);
+                }
             }
 
-            this.addTimeline(timeLine);
-            
+            for (Segment segment : playerSegments) {
+                rotationGroup.addSegment(segment, SegmentGroup.Position.WITH_FIRST, "MapRotation");
+            }
+
+            printBoard();
+
+            getSegmentGroup().addSegment(rotationGroup, SegmentGroup.Position.AFTER_LAST_TAG, "RotationGroup");
+
             TurnZ.getINSTANCE().getProcessingQueue().addJob(new ProcessingQueue.Job() {
 
                 @Override
                 public boolean doJob() {
-                    timeLine.compile();
+                    getSegmentGroup().compile();
+                    //TurnZ.getINSTANCE().getUI().repaint(rotationGroup.getDuration());
                     return true;
                 }
 
@@ -209,7 +209,78 @@ public class Map extends AComponent {
                     return true;
                 }
             });
+
+            if (playerWin == 0) {
+                JOptionPane.showMessageDialog(null, "You Win!");
+            StateMachine.levelSelectionPane.setVisible(true);
+            }
+            
+            for (int i = 0; i < playerBlocks.size(); i++) {
+                if (playerBlocks.get(i).isInvisible()) {
+                    playerBlocks.remove(playerBlocks.get(i));
+                    i--;
+                }
+            }
+
         }
+    }
+    
+    public void saveLevel() {
+        Level save = new Level(getLevel().getID(), new Block[getLevel().getWidth()][getLevel().getHeight()]);
+        
+        for (int y = 0; y < getLevel().getHeight(); y++) {
+            for (int x = 0; x < getLevel().getWidth(); x++) {
+                save.setBlock(getLevel().getBlock(x, y), x, y);
+                
+                for (PlayerBlock playerBlock : playerBlocks) {
+                    if (playerBlock.getArrayPosition().x == x && playerBlock.getArrayPosition().y == y) {
+                        save.setBlock(playerBlock, x, y);
+                    }
+                }
+            }
+        }
+        
+        getLevel().setSavedStates(save);
+        
+        try {
+            LevelManipulator.outputLevel(level, LevelManipulator.getSaveLevelPath(getLevel().getID()+""));
+        } catch (FileNotFoundException ex) {
+            Logger.getLogger(Map.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+        } catch (InvalidLevelFileException ex) {
+            Logger.getLogger(Map.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+        }
+    }
+
+    private void printBoard() {
+
+        for (int i = 0; i < getLevel().getWidth() * 2 + 3; i++) {
+            System.out.print("-");
+        }
+
+        System.out.println();
+
+        for (int y = 0; y < getLevel().getHeight(); y++) {
+            System.out.print("| ");
+            for (int x = 0; x < getLevel().getWidth(); x++) {
+
+                char blockChar = getLevel().getBlock(x, y).getChar();
+
+                for (PlayerBlock playerBlock : playerBlocks) {
+                    if (playerBlock.getArrayPosition().x == x && playerBlock.getArrayPosition().y == y) {
+                        blockChar = playerBlock.getChar();
+                    }
+                }
+
+                System.out.print(blockChar + " ");
+            }
+            System.out.print("|\n");
+        }
+
+        for (int i = 0; i < getLevel().getWidth() * 2 + 3; i++) {
+            System.out.print("-");
+        }
+        System.out.println("\n");
+
     }
 
     private Segment playerFall(PlayerBlock playerBlock) {
@@ -220,12 +291,10 @@ public class Map extends AComponent {
 
         if (nextBlock != null) {
             action = nextBlock.doAction();
-            System.out.println(nextBlock.getArrayPosition());
         }
 
         //if we must stay where we are...
         if (nextBlock == null || action == BlockAction.Stop) {
-            System.out.println("stop");
             Segment segment;
             Block currentBlockHover = getLevel().getBlock(playerBlock.getArrayPosition().x, playerBlock.getArrayPosition().y);
 
@@ -240,7 +309,17 @@ public class Map extends AComponent {
             if (action == BlockAction.PassThrough) {
                 playerBlock.setArrayPosition(nextBlock.getArrayPosition());
                 Segment segment = playerFall(playerBlock);
-                segment.setTotalFrames(segment.getTotalFrames()+Config.timeToFrames(0.3));
+                segment.setDuration(segment.getDuration() + Config.timeToFrames(0.3));
+                return segment;
+                
+            } else if (action == BlockAction.Finish) {
+                playerBlock.setArrayPosition(nextBlock.getArrayPosition());
+                Segment segment = playerFall(playerBlock);
+                segment.setDuration(segment.getDuration() + Config.timeToFrames(0.3));
+
+                playerWin--;
+                playerBlock.setInvisible();
+                
                 return segment;
             } else {
                 return null;
@@ -254,7 +333,7 @@ public class Map extends AComponent {
 
         switch (getGravity()) {
             case North:
-                yShift = -11;
+                yShift = -1;
                 break;
             case South:
                 yShift = 1;
@@ -374,13 +453,6 @@ public class Map extends AComponent {
             this.add(playerLayer, ALayeredPane.PALETTE_LAYER);
         }
 
-//        @Override
-//        protected void paintComponent(Graphics g) {
-//            Graphics2D g2d = UIToolkit.getPrettyGraphics(g);
-//            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
-//            g2d.setPaint(AColor.DarkGrey.darker());
-//            g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
-//        }
         private class BlockLayer extends AComponent {
 
             public BlockLayer() {
@@ -395,9 +467,9 @@ public class Map extends AComponent {
 
                 gc.insets = new Insets(3, 3, 3, 3);
 
-                for (int i = 0; i < getLevel().getHeight(); i++) {
-                    for (int j = 0; j < getLevel().getWidth(); j++) {
-                        this.add(getLevel().getBlock(i, j), gc);
+                for (int y = 0; y < getLevel().getHeight(); y++) {
+                    for (int x = 0; x < getLevel().getWidth(); x++) {
+                        this.add(getLevel().getBlock(x, y), gc);
                         gc.gridx++;
                     }
                     gc.gridx = 0;
@@ -431,11 +503,11 @@ public class Map extends AComponent {
 
                     location:
                     {
-                        for (int i = 0; i < getLevel().getHeight(); i++) {
-                            for (int j = 0; j < getLevel().getWidth(); j++) {
-                                Point blockArrayPosition = getLevel().getBlock(i, j).getArrayPosition();
+                        for (int y = 0; y < getLevel().getHeight(); y++) {
+                            for (int x = 0; x < getLevel().getWidth(); x++) {
+                                Point blockArrayPosition = getLevel().getBlock(x, y).getArrayPosition();
                                 if (blockArrayPosition.x == playerBlock.getArrayPosition().x && blockArrayPosition.y == playerBlock.getArrayPosition().y) {
-                                    playerBlock.setLocation(getLevel().getBlock(i, j).getLocation());
+                                    playerBlock.setLocation(getLevel().getBlock(x, y).getLocation());
                                     break location;
                                 }
                             }

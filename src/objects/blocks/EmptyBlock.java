@@ -13,7 +13,7 @@ import swing.toolkit.UIToolkit;
 public class EmptyBlock extends Block {
 
     public EmptyBlock() {
-        super();
+        super(1);
         setType("EmptyBlock");
     }
 
@@ -28,6 +28,11 @@ public class EmptyBlock extends Block {
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
         g2d.setPaint(AColor.DarkBlue);
         //g2d.drawRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
+    }
+
+    @Override
+    public char getChar() {
+        return ' ';
     }
 
 }
